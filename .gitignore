@@ -1,0 +1,183 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+wheels/
+*.whl
+MANIFEST
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env/
+virtualenv/
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.coveragerc
+.tox/
+nosetests.xml
+
+# mypy / type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# ── Node / JavaScript ────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.yarn/
+.npm/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.next/
+.nuxt/
+.output/
+dist/
+out/
+build/
+
+# ── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+api_keys.txt
+config.local.*
+
+# ── AI / ML Artifacts ────────────────────────────────────────────────────────
+# Model weights — can be huge, use git-lfs or external storage instead
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.hdf5
+*.pb
+*.tflite
+*.onnx
+*.bin
+*.safetensors
+*.pkl
+*.pickle
+*.joblib
+*.npy
+*.npz
+
+# Datasets
+data/raw/
+data/processed/
+datasets/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.jsonl
+*.json.gz
+
+# Training outputs
+runs/
+logs/
+outputs/
+checkpoints/
+wandb/
+mlruns/
+lightning_logs/
+.neptune/
+tensorboard_logs/
+saved_models/
+fine_tuned/
+lora_weights/
+
+# Embeddings / vector stores
+*.faiss
+*.index
+chroma_db/
+vector_store/
+embeddings/
+
+# Ollama local model cache (don't commit pulled model blobs)
+.ollama/
+
+# ── OS & Editor ──────────────────────────────────────────────────────────────
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# ── Claude Code ──────────────────────────────────────────────────────────────
+.claude/settings.local.json
+.claude/projects/
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.patch
+.cache/
+tmp/
+temp/
+scratch/
