@@ -169,6 +169,9 @@ $RECYCLE.BIN/
 .claude/settings.local.json
 .claude/projects/
 
+# ── Generated images (from CV lessons) ─────────────────────────────────────
+module-03-computer-vision/*.png
+
 # ── Misc ─────────────────────────────────────────────────────────────────────
 *.log
 *.tmp
