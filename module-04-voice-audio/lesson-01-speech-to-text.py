@@ -79,8 +79,10 @@ def part1_record_and_transcribe():
     print("=" * 60)
 
     # Load Whisper model -- downloads on first run
-    print("\n  Loading Whisper 'small' model (244M params)...")
-    model = whisper.load_model("small")
+    # Using 'base' model -- 'small' is better but requires a large download (461MB)
+    # With forced English language, 'base' works well enough
+    print("\n  Loading Whisper 'base' model (74M params)...")
+    model = whisper.load_model("base")
     print(f"  Model loaded on: {model.device}")
 
     # Record audio from microphone
