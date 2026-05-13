@@ -60,13 +60,11 @@ def transcribe_audio_array(model, audio_np):
     # Like converting a photo to grayscale before edge detection
     mel = whisper.log_mel_spectrogram(audio_tensor).to(model.device)
 
-    # Detect language
-    _, probs = model.detect_language(mel)
-    language = max(probs, key=probs.get)
-
-    # Decode (transcribe)
-    options = whisper.DecodingOptions(fp16=False)
+    # Decode (transcribe) — force English for reliable results
+    # Without language="en", small models often misdetect the language
+    options = whisper.DecodingOptions(fp16=False, language="en")
     result = whisper.decode(model, mel, options)
+    language = "en"
 
     return {"text": result.text, "language": language}
 
@@ -81,8 +79,8 @@ def part1_record_and_transcribe():
     print("=" * 60)
 
     # Load Whisper model -- downloads on first run
-    print("\n  Loading Whisper 'base' model (74M params)...")
-    model = whisper.load_model("base")
+    print("\n  Loading Whisper 'small' model (244M params)...")
+    model = whisper.load_model("small")
     print(f"  Model loaded on: {model.device}")
 
     # Record audio from microphone
@@ -142,9 +140,10 @@ def part2_live_dictation(model):
             sd.wait()
 
             # Check if there's actual audio (not silence)
+            # Print volume so you can see what your mic outputs
             volume = np.abs(audio).mean()
-            if volume < 0.005:
-                print("(silence)")
+            if volume < 0.001:  # very low threshold -- adjust if needed
+                print(f"(silence, vol={volume:.5f})")
                 continue
 
             # Transcribe directly from array
