@@ -19,23 +19,56 @@ Your RTX 4070 can run medium comfortably, large with some patience.
 
 What we'll do:
   1. Record audio from your microphone
-  2. Transcribe it with Whisper
-  3. Show timestamps and language detection
+  2. Transcribe it with Whisper (bypassing ffmpeg -- direct numpy array)
+  3. Show language detection
   4. Build a live dictation mode (talk and see text appear)
 """
 
 import whisper
 import sounddevice as sd
-import soundfile as sf
 import numpy as np
 import os
 import time
-import tempfile
+import torch
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Whisper expects 16kHz mono audio
 SAMPLE_RATE = 16000
+
+
+def transcribe_audio_array(model, audio_np):
+    """
+    Transcribe a numpy audio array directly with Whisper.
+    This bypasses ffmpeg entirely -- we feed raw audio straight to the model.
+
+    Steps (what Whisper does internally):
+      1. Pad or trim audio to 30 seconds (Whisper's fixed window)
+      2. Convert to a mel spectrogram (frequency representation)
+      3. Feed through the neural network
+      4. Decode the output tokens into text
+    """
+    # Ensure audio is 1D float32
+    if audio_np.ndim > 1:
+        audio_np = audio_np.flatten()
+    audio_np = audio_np.astype(np.float32)
+
+    # Pad or trim to 30 seconds (Whisper's expected input length)
+    audio_tensor = whisper.pad_or_trim(audio_np)
+
+    # Convert to mel spectrogram -- this is how audio is represented for neural nets
+    # Like converting a photo to grayscale before edge detection
+    mel = whisper.log_mel_spectrogram(audio_tensor).to(model.device)
+
+    # Detect language
+    _, probs = model.detect_language(mel)
+    language = max(probs, key=probs.get)
+
+    # Decode (transcribe)
+    options = whisper.DecodingOptions(fp16=False)
+    result = whisper.decode(model, mel, options)
+
+    return {"text": result.text, "language": language}
 
 
 # ==============================================================================
@@ -50,50 +83,34 @@ def part1_record_and_transcribe():
     # Load Whisper model -- downloads on first run
     print("\n  Loading Whisper 'base' model (74M params)...")
     model = whisper.load_model("base")
-    print("  Model loaded.\n")
+    print(f"  Model loaded on: {model.device}")
 
     # Record audio from microphone
     duration = 5  # seconds
-    print(f"  Recording {duration} seconds of audio...")
+    print(f"\n  Recording {duration} seconds of audio...")
     print("  Speak now!\n")
 
     # sounddevice records audio as a NumPy array -- just like images are arrays!
-    # Audio: 1D array of amplitude values over time
-    # Images: 3D array of color values over space
     audio = sd.rec(int(duration * SAMPLE_RATE),
                    samplerate=SAMPLE_RATE,
-                   channels=1,       # mono
+                   channels=1,
                    dtype='float32')
-    sd.wait()  # wait until recording is done
+    sd.wait()
 
     print(f"  Recording complete.")
     print(f"  Audio shape: {audio.shape}")
-    print(f"  That's {audio.shape[0]:,} samples at {SAMPLE_RATE}Hz = {audio.shape[0]/SAMPLE_RATE:.1f}s")
+    print(f"  That's {audio.shape[0]:,} samples at {SAMPLE_RATE}Hz = {audio.shape[0]/SAMPLE_RATE:.1f}s\n")
 
-    # Save the audio to a file
-    audio_path = os.path.join(OUTPUT_DIR, "recording.wav")
-    sf.write(audio_path, audio, SAMPLE_RATE)
-    print(f"  Saved to: recording.wav\n")
-
-    # Transcribe with Whisper
+    # Transcribe directly from numpy array (no ffmpeg needed!)
     print("  Transcribing with Whisper...")
     start = time.time()
-    result = model.transcribe(audio_path)
+    result = transcribe_audio_array(model, audio)
     elapsed = time.time() - start
 
     print(f"\n  --- TRANSCRIPTION ---")
     print(f"  Text: {result['text']}")
     print(f"  Language: {result['language']}")
     print(f"  Time: {elapsed:.1f}s")
-
-    # Show segments with timestamps
-    if result['segments']:
-        print(f"\n  --- SEGMENTS (with timestamps) ---")
-        for seg in result['segments']:
-            start_t = seg['start']
-            end_t = seg['end']
-            text = seg['text'].strip()
-            print(f"  [{start_t:.1f}s -> {end_t:.1f}s] {text}")
 
     print()
     return model
@@ -115,7 +132,6 @@ def part2_live_dictation(model):
 
     try:
         while True:
-            # Visual indicator
             print(f"  [Recording {chunk_duration}s...] ", end="", flush=True)
 
             # Record a chunk
@@ -127,19 +143,18 @@ def part2_live_dictation(model):
 
             # Check if there's actual audio (not silence)
             volume = np.abs(audio).mean()
-            if volume < 0.005:  # silence threshold
+            if volume < 0.005:
                 print("(silence)")
                 continue
 
-            # Save to temp file for Whisper
-            tmp_path = os.path.join(tempfile.gettempdir(), "whisper_chunk.wav")
-            sf.write(tmp_path, audio, SAMPLE_RATE)
-
-            # Transcribe
-            result = model.transcribe(tmp_path, fp16=False)
+            # Transcribe directly from array
+            result = transcribe_audio_array(model, audio)
             text = result['text'].strip()
 
-            if text and text not in ["", ".", "Thank you.", "Thanks for watching."]:
+            # Filter out Whisper hallucinations on near-silence
+            skip_phrases = ["", ".", "Thank you.", "Thanks for watching.",
+                            "you", "You", "Thank you for watching."]
+            if text and text not in skip_phrases:
                 full_transcript.append(text)
                 print(f"{text}")
             else:
@@ -152,35 +167,6 @@ def part2_live_dictation(model):
     if full_transcript:
         print(f"\n\n  --- FULL TRANSCRIPT ---")
         print(f"  {' '.join(full_transcript)}")
-    print()
-
-
-# ==============================================================================
-# PART 3: Transcribe from a file
-# ==============================================================================
-
-def part3_transcribe_file(model):
-    print("=" * 60)
-    print("  PART 3: Transcribe Any Audio File")
-    print("=" * 60)
-
-    audio_path = os.path.join(OUTPUT_DIR, "recording.wav")
-    if not os.path.exists(audio_path):
-        print("\n  No recording.wav found. Run Part 1 first.")
-        return
-
-    print(f"\n  Transcribing: {audio_path}")
-
-    # Whisper can transcribe any audio format: wav, mp3, m4a, etc.
-    result = model.transcribe(audio_path, fp16=False)
-
-    print(f"  Text: {result['text']}")
-    print(f"  Language detected: {result['language']}")
-
-    # You could also translate to English
-    print("\n  Now translating to English (if not already)...")
-    result_en = model.transcribe(audio_path, task="translate", fp16=False)
-    print(f"  English: {result_en['text']}")
     print()
 
 
