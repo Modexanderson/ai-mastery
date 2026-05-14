@@ -163,23 +163,27 @@ def stream_response(messages):
         return None
 
 
-def run_planner(goal, max_steps=10):
+def run_planner(goal, max_steps=6):
     """Run the planner agent loop."""
     print(f"\n  GOAL: {goal}")
     print(f"  Output: {OUTPUT_DIR}")
     print("  " + "-" * 50)
 
+    system_msg = {"role": "system", "content": build_planner_prompt()}
     history = [
-        {"role": "system", "content": build_planner_prompt()},
         {"role": "user", "content": f"Create this project: {goal}"},
     ]
+    files_created = []  # track what was created
 
     for step in range(1, max_steps + 1):
         print(f"\n  --- Step {step}/{max_steps} ---")
         sys.stdout.write("  Agent: ")
         sys.stdout.flush()
 
-        reply = stream_response(history)
+        # Keep context small: system + first message + last 4 messages
+        trimmed = [system_msg, history[0]] + history[-4:] if len(history) > 5 else [system_msg] + history
+
+        reply = stream_response(trimmed)
         if reply is None:
             break
 
@@ -187,10 +191,11 @@ def run_planner(goal, max_steps=10):
 
         # Check for completion
         if "plan_complete" in reply.lower() or "PROJECT COMPLETE" in reply:
-            # Execute any final tool calls
             tool_calls = parse_tool_calls(reply)
             for func_name, arg in tool_calls:
                 result = execute_tool(func_name, arg)
+                if "create_file" in func_name:
+                    files_created.append(arg.split("|")[0].strip())
                 print(f"    -> {func_name}: {result[:150]}")
             print(f"\n  Project finished in {step} steps!")
             return True
@@ -201,17 +206,18 @@ def run_planner(goal, max_steps=10):
             results = []
             for func_name, arg in tool_calls:
                 result = execute_tool(func_name, arg)
-                results.append(f"[Result of {func_name}]: {result}")
+                if "create_file" in func_name:
+                    files_created.append(arg.split("|")[0].strip())
+                results.append(f"[{func_name} OK]: {result[:100]}")
                 print(f"    -> {func_name}: {result[:150]}")
 
-            history.append({
-                "role": "user",
-                "content": "\n".join(results) + "\n\nContinue with the next step. Create the next file, or use [TOOL: plan_complete(summary)] if done."
-            })
+            # Short follow-up prompt to keep context small
+            summary = f"Done. Files so far: {files_created}. Create the next file or [TOOL: plan_complete(done)]."
+            history.append({"role": "user", "content": summary})
         else:
             history.append({
                 "role": "user",
-                "content": "Now execute your plan. Use the tools to create the files."
+                "content": "Use tools now. Create files with [TOOL: create_file(path|code)]."
             })
 
     print(f"\n  Hit max steps ({max_steps}).")
