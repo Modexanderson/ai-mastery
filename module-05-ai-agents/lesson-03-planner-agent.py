@@ -122,7 +122,8 @@ RULES:
 
 
 def parse_tool_calls(text):
-    pattern = r'\[TOOL:\s*(\w+)\(([^)]*)\)\]'
+    # Match [TOOL: name(args)] -- args can contain escaped parens and quotes
+    pattern = r'\[TOOL:\s*(\w+)\(((?:[^)(]|\\.)*)\)\]'
     return re.findall(pattern, text)
 
 
@@ -131,7 +132,9 @@ def execute_tool(name, arg):
         return f"Unknown tool: {name}"
     tool = TOOLS[name]
     if tool["takes_arg"]:
-        return tool["func"](arg.strip())
+        # Clean up: models often wrap args in quotes or escape them
+        clean_arg = arg.strip().strip('"').strip("'").replace('\\"', '"').replace('\\n', '\n')
+        return tool["func"](clean_arg)
     return tool["func"]()
 
 
