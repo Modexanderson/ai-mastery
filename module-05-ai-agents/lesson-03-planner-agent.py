@@ -115,10 +115,11 @@ PROCESS:
 4. When done use [TOOL: plan_complete(summary)]
 
 RULES:
-- Create SIMPLE but WORKING code (no placeholders)
+- Create SIMPLE but WORKING code
 - Use [TOOL: create_file(path|content)] for each file
-- Keep files short and practical
-- End with plan_complete"""
+- Keep files SHORT (under 30 lines each)
+- Create ALL files in 2-3 steps max, then call plan_complete
+- Do NOT explain code, just create the files"""
 
 
 def parse_tool_calls(text):
@@ -132,8 +133,11 @@ def execute_tool(name, arg):
         return f"Unknown tool: {name}"
     tool = TOOLS[name]
     if tool["takes_arg"]:
-        # Clean up: models often wrap args in quotes or escape them
+        # Clean up: models often wrap args in quotes, add param names, etc.
         clean_arg = arg.strip().strip('"').strip("'").replace('\\"', '"').replace('\\n', '\n')
+        # Strip param-name prefixes like "path=", "content=", "name="
+        if "=" in clean_arg and "|" not in clean_arg:
+            clean_arg = clean_arg.split("=", 1)[1].strip().strip('"').strip("'")
         return tool["func"](clean_arg)
     return tool["func"]()
 
