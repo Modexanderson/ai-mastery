@@ -147,30 +147,14 @@ def build_system_prompt():
     """Build the system prompt that teaches the agent how to use tools."""
     tool_list = "\n".join(f"  - {name}: {info['desc']}" for name, info in TOOLS.items())
 
-    return f"""You are a Research Agent. Your job is to investigate topics thoroughly.
+    return f"""You are a research agent with tools.
 
-You have access to these tools:
+Tools:
 {tool_list}
 
-HOW TO USE TOOLS:
-When you need information, write [TOOL: function_name(argument)] in your response.
-The system will execute the tool and give you the result.
-You can use multiple tools in one response.
-
-YOUR PROCESS:
-1. PLAN: When given a topic, first plan what you need to investigate
-2. ACT: Use tools to gather information
-3. OBSERVE: Read the tool results
-4. THINK: Analyze what you learned and what else you need
-5. REPORT: When you have enough info, write [DONE] followed by your final report
-
-RULES:
-- Always start by using [TOOL: lookup(topic)] to gather information
-- Use [TOOL: note(insight)] to save important findings as you go
-- When you have gathered enough information, write [DONE] and then your final report
-- Keep your thinking SHORT between tool calls
-- Your final report should be 3-5 sentences summarizing what you found
-- Be conversational, not robotic"""
+To use a tool write [TOOL: name(arg)] in your reply.
+When done write [DONE] then your final 2-3 sentence summary.
+Start by looking up the topic."""
 
 
 def parse_tool_calls(text):
@@ -191,7 +175,7 @@ def execute_tool(name, arg):
         return tool["func"]()
 
 
-def run_agent(goal, max_steps=8):
+def run_agent(goal, max_steps=5):
     """
     The Agent Loop -- this is the heart of every AI agent.
 
@@ -213,14 +197,26 @@ def run_agent(goal, max_steps=8):
     for step in range(1, max_steps + 1):
         print(f"\n  --- Step {step}/{max_steps} ---")
 
-        # 1. Ask the LLM
+        # 1. Ask the LLM (streaming so we don't timeout on CPU)
         try:
+            import sys
             response = requests.post(OLLAMA_URL, json={
                 "model": MODEL,
-                "stream": False,
+                "stream": True,
                 "messages": history,
-            }, timeout=120)
-            reply = response.json()["message"]["content"]
+                "options": {"num_ctx": 2048, "num_predict": 256, "num_gpu": 99},
+            }, stream=True, timeout=300)
+            reply = ""
+            sys.stdout.write("  Agent: ")
+            sys.stdout.flush()
+            for line in response.iter_lines():
+                if line:
+                    chunk = json.loads(line)
+                    token = chunk.get("message", {}).get("content", "")
+                    reply += token
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+            print()  # newline after streaming
         except Exception as e:
             print(f"  ERROR: Could not reach Ollama: {e}")
             break
@@ -276,13 +272,21 @@ def main():
     print("  Model: qwen2.5-coder:7b (local via Ollama)")
     print("=" * 60)
 
-    # Check Ollama
+    # Check Ollama and warm up the model
     print("\n  Checking Ollama...")
     try:
         requests.get("http://localhost:11434/api/tags", timeout=5)
-        print("  Ollama ready.")
-    except Exception:
-        print("  ERROR: Ollama not running! Start it with 'ollama serve'")
+        print("  Ollama running. Warming up model (first call is slow on CPU)...")
+        # Warm-up: load model into memory with a tiny request
+        r = requests.post(OLLAMA_URL, json={
+            "model": MODEL, "stream": False,
+            "messages": [{"role": "user", "content": "hi"}],
+            "options": {"num_ctx": 512, "num_predict": 5, "num_gpu": 99},
+        }, timeout=300)
+        print("  Model loaded and ready!")
+    except Exception as e:
+        print(f"  ERROR: Ollama not responding: {e}")
+        print("  Make sure Ollama is running: ollama serve")
         return
 
     # -- Demo 1: Automatic research --
