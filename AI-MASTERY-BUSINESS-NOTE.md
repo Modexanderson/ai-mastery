@@ -1,6 +1,6 @@
 # AI Mastery -- Comprehensive Business & Product Note
 
-## Author: Mordecai Gaza (Cyborg)
+## Author: Mordecai (Cyborg)
 ## Date: May 2026
 ## Purpose: Portfolio reference, client pitches, freelancing, business development
 
